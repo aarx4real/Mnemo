@@ -1,32 +1,48 @@
-# React + TypeScript + Vite
+# 🧠 Mnemo
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+> **Mnemo** is an intelligent personal memory and context-management platform designed to organize, recall, and chat with your accumulated knowledge in real time.
 
-Currently, two official plugins are available:
+![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)
+![React](https://img.shields.io/badge/React-18.x-61dafb?logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6?logo=typescript)
+![Vite](https://img.shields.io/badge/Vite-6.x-646cff?logo=vite)
+![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-3.x-38bdf8?logo=tailwindcss)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## ✨ Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+* **⚡ High-Performance Architecture**: Powered by Vite and React for instant HMR and minimal bundle footprints.
+* **🎨 Semantic Design System**: Fully responsive design tokens with dynamic light and dark theme context.
+* **🗂 Structured Routing**: Full app routing powered by React Router with placeholder views and active shells.
+* **🔄 Server State Management**: Clean API integration pipeline built with TanStack Query.
+* **🧩 Modular Component System**: Built using `class-variance-authority` (CVA) and Tailwind CSS for composability.
 
-## Expanding the Oxlint configuration
+---
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## 🛠 Tech Stack
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
+* **Frontend**: [React](https://react.dev/), [TypeScript](https://www.typescriptlang.org/)
+* **Build Tool**: [Vite](https://vitejs.dev/)
+* **Styling**: [Tailwind CSS](https://tailwindcss.com/)
+* **Routing**: [React Router DOM](https://reactrouter.com/)
+* **State & Query**: [TanStack Query (React Query)](https://tanstack.com/query)
+* **Icons & Utilities**: Class Variance Authority (`cva`), `clsx`, `tailwind-merge`
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+Ensure you have Node.js (v18+) installed on your machine.
+
+* Node.js: `>= 18.0.0`
+* npm: `>= 9.0.0`
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone [https://github.com/YOUR_USERNAME/Mnemo.git](https://github.com/YOUR_USERNAME/Mnemo.git)
+   cd Mnemo
