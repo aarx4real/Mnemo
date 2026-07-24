@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppShell } from './AppShell';
+import { DashboardPage } from '@/pages/dashboard/Dashboard';
 import { ROUTES } from '@/constants/routes';
 
 const Placeholder = ({ title }: { title: string }) => (
@@ -37,7 +38,7 @@ export const router = createBrowserRouter([
           },
           {
             path: 'dashboard',
-            element: <Placeholder title="Dashboard Page" />,
+            element: <DashboardPage />,
           },
           {
             path: 'memories',
