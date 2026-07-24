@@ -9,7 +9,11 @@ import {
   Eye, 
   EyeOff, 
   ShieldCheck,
-  AlertCircle 
+  AlertCircle,
+  Sparkles,
+  Zap,
+  Search,
+  Check
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -19,7 +23,6 @@ declare global {
   }
 }
 
-// Interface for registered accounts in local database
 interface StoredUser {
   email: string;
   password?: string;
@@ -39,7 +42,7 @@ export const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
 
-  // 1. Strict Email Format Validator (Accepts .com, .edu, .org, .ac.in, etc.)
+  // 1. Strict Email Format Validator
   const isValidEmail = (emailStr: string): boolean => {
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     return emailRegex.test(emailStr.trim());
@@ -77,11 +80,9 @@ export const LoginPage: React.FC = () => {
         provider: 'google' as const,
       };
 
-      // Save to active session
       localStorage.setItem('mnemo_user', JSON.stringify(userSession));
       localStorage.setItem('mnemo_token', response.credential);
 
-      // Add to registered users if new
       const registered = getRegisteredUsers();
       if (!registered.some(u => u.email.toLowerCase() === googleUser.email.toLowerCase())) {
         registered.push(userSession);
@@ -99,7 +100,7 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  // Initialize Google Identity Button
+  // Initialize Native Dark Google Identity Button
   useEffect(() => {
     const googleClientId =
       import.meta.env.VITE_GOOGLE_CLIENT_ID ||
@@ -115,13 +116,13 @@ export const LoginPage: React.FC = () => {
 
         const targetDiv = document.getElementById('googleSignInBtn');
         if (targetDiv) {
-          targetDiv.innerHTML = ''; // Clear previous render
+          targetDiv.innerHTML = ''; 
           window.google.accounts.id.renderButton(targetDiv, {
-            theme: 'outline',
+            theme: 'filled_black', // Uses sleek dark theme from Google
             size: 'large',
-            width: '100%',
+            width: '380',
             text: isSignUp ? 'signup_with' : 'continue_with',
-            shape: 'rectangular',
+            shape: 'pill',
           });
         }
       }
@@ -147,13 +148,11 @@ export const LoginPage: React.FC = () => {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    // Step A: Validate Email Format
     if (!isValidEmail(cleanEmail)) {
       setErrorMessage('Please enter a valid email address (e.g. name@gmail.com or student@university.edu)');
       return;
     }
 
-    // Step B: Validate Password Length
     if (password.length < 6) {
       setErrorMessage('Password must be at least 6 characters long.');
       return;
@@ -165,7 +164,6 @@ export const LoginPage: React.FC = () => {
 
     setTimeout(() => {
       if (isSignUp) {
-        // --- SIGN UP LOGIC ---
         if (existingUser) {
           setErrorMessage('An account with this email already exists. Please sign in instead.');
           setIsLoading(false);
@@ -174,7 +172,7 @@ export const LoginPage: React.FC = () => {
 
         const newUser: StoredUser = {
           email: cleanEmail,
-          password: password, // Note: For production backend, passwords should be hashed server-side
+          password: password,
           name: name.trim() || cleanEmail.split('@')[0],
           provider: 'email',
         };
@@ -187,7 +185,6 @@ export const LoginPage: React.FC = () => {
         setIsLoading(false);
         navigate('/app/dashboard');
       } else {
-        // --- SIGN IN LOGIC ---
         if (!existingUser) {
           setErrorMessage('No account found with this email. Please sign up first.');
           setIsLoading(false);
@@ -200,7 +197,6 @@ export const LoginPage: React.FC = () => {
           return;
         }
 
-        // Login Success
         localStorage.setItem('mnemo_user', JSON.stringify(existingUser));
         localStorage.setItem('mnemo_token', 'jwt-mock-token-' + Date.now());
 
@@ -211,157 +207,256 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background text-text-primary flex flex-col justify-center items-center p-4 relative overflow-hidden">
-      {/* Background Subtle Gradient Blurs */}
-      <div className="absolute top-1/4 -left-20 w-80 h-80 bg-primary/20 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-accent/20 rounded-full blur-3xl pointer-events-none" />
-
-      {/* Main Container */}
-      <div className="w-full max-w-md space-y-6 z-10">
+    <div className="min-h-screen bg-[#070A0F] text-white flex flex-col lg:flex-row relative overflow-hidden font-sans">
+      
+      {/* LEFT SIDE: Interactive Product Showcase & Glow Effects */}
+      <div className="lg:w-1/2 relative hidden lg:flex flex-col justify-between p-12 border-r border-white/10 bg-gradient-to-br from-[#0D121F] via-[#070A0F] to-[#0A0D14] overflow-hidden">
         
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center p-3 bg-surface border border-border rounded-2xl shadow-lg mb-2">
-            <Brain className="w-8 h-8 text-primary" />
+        {/* Ambient Gradient Glow Orbs */}
+        <div className="absolute -top-24 -left-24 w-96 h-96 bg-indigo-600/20 rounded-full blur-[120px] pointer-events-none" />
+        <div className="absolute top-1/2 -right-24 w-96 h-96 bg-purple-600/15 rounded-full blur-[120px] pointer-events-none" />
+        
+        {/* Subtle Grid Pattern Overlay */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
+
+        {/* Top Logo */}
+        <div className="relative z-10 flex items-center gap-3">
+          <div className="p-2.5 bg-indigo-500/10 border border-indigo-500/20 rounded-xl backdrop-blur-md">
+            <Brain className="w-6 h-6 text-indigo-400" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">Mnemo</h1>
-          <p className="text-text-secondary text-sm">
-            {isSignUp ? 'Create your personal second brain' : 'Welcome back to your second brain'}
-          </p>
+          <span className="text-xl font-bold tracking-tight text-white">Mnemo</span>
         </div>
 
-        {/* Card Container */}
-        <div className="bg-surface border border-border rounded-2xl p-6 sm:p-8 shadow-xl space-y-6">
-          
-          {/* Error Message Alert Banner */}
-          {errorMessage && (
-            <div className="p-3.5 rounded-xl bg-error/10 border border-error/30 flex items-start gap-3 text-xs text-error animate-in fade-in zoom-in-95 duration-150">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
-
-          {/* Official Native Google Button Target */}
-          <div id="googleSignInBtn" className="w-full min-h-[44px] flex justify-center" />
-
-          {/* Divider */}
-          <div className="relative flex items-center justify-center">
-            <div className="border-t border-border w-full" />
-            <span className="bg-surface px-3 text-xs text-text-muted uppercase tracking-wider relative">
-              Or with email
-            </span>
+        {/* Middle Showcase Content */}
+        <div className="relative z-10 space-y-8 my-auto max-w-lg">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold tracking-wide">
+            <Sparkles className="w-3.5 h-3.5" />
+            AI-Powered Knowledge Vault
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {isSignUp && (
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-text-secondary">Full Name</label>
-                <div className="relative flex items-center">
-                  <User className="w-4 h-4 text-text-muted absolute left-3" />
-                  <input
-                    type="text"
-                    required
-                    placeholder="Jane Doe"
-                    value={name}
-                    onChange={(e) => {
-                      setName(e.target.value);
-                      setErrorMessage(null);
-                    }}
-                    className="w-full bg-background border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                  />
-                </div>
-              </div>
-            )}
+          <h2 className="text-4xl font-extrabold tracking-tight text-white leading-tight">
+            Capture everything. <br />
+            <span className="bg-gradient-to-r from-indigo-400 via-purple-300 to-pink-400 bg-clip-text text-transparent">
+              Recall instantly with AI.
+            </span>
+          </h2>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-text-secondary">Email address</label>
-              <div className="relative flex items-center">
-                <Mail className="w-4 h-4 text-text-muted absolute left-3" />
-                <input
-                  type="email"
-                  required
-                  placeholder="name@gmail.com or student@university.edu"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    setErrorMessage(null);
-                  }}
-                  className="w-full bg-background border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                />
+          <p className="text-slate-400 text-sm leading-relaxed">
+            Your unified second brain that indexes notes, articles, research, and code snippets into a searchable context engine.
+          </p>
+
+          {/* Floating UI Mockup Preview Cards */}
+          <div className="space-y-3 pt-2">
+            <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10 backdrop-blur-md space-y-2 hover:border-indigo-500/30 transition-colors">
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span className="flex items-center gap-1.5 text-indigo-400 font-medium">
+                  <Search className="w-3.5 h-3.5" /> Vector Semantic Query
+                </span>
+                <span>0.04s</span>
               </div>
+              <p className="text-xs text-slate-200 font-mono bg-black/40 p-2 rounded border border-white/5">
+                "What were my findings on PostgreSQL HNSW index tradeoffs?"
+              </p>
             </div>
 
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-medium text-text-secondary">Password</label>
-                {!isSignUp && (
-                  <button type="button" className="text-xs text-primary hover:underline">
-                    Forgot password?
-                  </button>
-                )}
+            <div className="flex items-center justify-between p-3.5 rounded-xl bg-white/[0.02] border border-white/5 text-xs text-slate-300">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>142 Memories indexed into active vector space</span>
               </div>
-              <div className="relative flex items-center">
-                <Lock className="w-4 h-4 text-text-muted absolute left-3" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  placeholder="At least 6 characters"
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    setErrorMessage(null);
-                  }}
-                  className="w-full bg-background border border-border rounded-xl pl-9 pr-10 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 text-text-muted hover:text-text-primary"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
+              <Zap className="w-3.5 h-3.5 text-amber-400" />
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Testimonial / Value prop */}
+        <div className="relative z-10 pt-6 border-t border-white/5 flex items-center justify-between text-xs text-slate-400">
+          <div className="flex items-center gap-2">
+            <Check className="w-4 h-4 text-indigo-400" />
+            <span>End-to-End Encrypted Storage</span>
+          </div>
+          <span>v2.4.0 Engine</span>
+        </div>
+      </div>
+
+      {/* RIGHT SIDE: Authentication Form */}
+      <div className="lg:w-1/2 w-full flex flex-col justify-center items-center p-6 sm:p-12 relative z-10">
+        
+        {/* Mobile Header Logo */}
+        <div className="lg:hidden flex items-center gap-2 mb-8">
+          <div className="p-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl">
+            <Brain className="w-6 h-6 text-indigo-400" />
+          </div>
+          <span className="text-xl font-bold tracking-tight">Mnemo</span>
+        </div>
+
+        <div className="w-full max-w-md space-y-6">
+          
+          {/* Header & Segmented Tab Switcher */}
+          <div className="space-y-4">
+            <div>
+              <h1 className="text-2xl font-bold text-white tracking-tight">
+                {isSignUp ? 'Create your account' : 'Welcome back'}
+              </h1>
+              <p className="text-slate-400 text-xs mt-1">
+                {isSignUp 
+                  ? 'Start building your personal knowledge base in seconds' 
+                  : 'Enter your credentials to access your context engine'}
+              </p>
             </div>
 
-            <Button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-2.5 gap-2 mt-2 font-semibold shadow-md"
-            >
-              {isLoading ? (
-                <span>Verifying...</span>
-              ) : (
-                <>
-                  <span>{isSignUp ? 'Create Account' : 'Sign In'}</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </Button>
-          </form>
-
-          {/* Toggle Sign In / Sign Up */}
-          <div className="text-center pt-2 border-t border-border/50">
-            <p className="text-xs text-text-secondary">
-              {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+            {/* Segmented Control Switcher */}
+            <div className="p-1 bg-white/[0.04] border border-white/10 rounded-xl grid grid-cols-2 gap-1 text-xs font-semibold">
               <button
                 type="button"
                 onClick={() => {
-                  setIsSignUp(!isSignUp);
+                  setIsSignUp(false);
                   setErrorMessage(null);
                 }}
-                className="text-primary font-medium hover:underline ml-1"
+                className={`py-2 rounded-lg transition-all duration-150 ${
+                  !isSignUp 
+                    ? 'bg-indigo-600 text-white shadow-md' 
+                    : 'text-slate-400 hover:text-white'
+                }`}
               >
-                {isSignUp ? 'Sign In' : 'Sign Up'}
+                Sign In
               </button>
-            </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSignUp(true);
+                  setErrorMessage(null);
+                }}
+                className={`py-2 rounded-lg transition-all duration-150 ${
+                  isSignUp 
+                    ? 'bg-indigo-600 text-white shadow-md' 
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Sign Up
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-center gap-2 text-xs text-text-muted">
-          <ShieldCheck className="w-4 h-4 text-success" />
-          <span>Encrypted with end-to-end AI session protection</span>
+          {/* Form Container */}
+          <div className="space-y-5">
+            
+            {/* Error Message Alert */}
+            {errorMessage && (
+              <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 flex items-start gap-3 text-xs text-red-400 animate-in fade-in zoom-in-95 duration-150">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            {/* Dark Mode Native Google Button Container */}
+            <div className="space-y-2">
+              <div id="googleSignInBtn" className="w-full min-h-[44px] flex justify-center" />
+            </div>
+
+            {/* Divider */}
+            <div className="relative flex items-center justify-center my-4">
+              <div className="border-t border-white/10 w-full" />
+              <span className="bg-[#070A0F] px-3 text-[10px] text-slate-500 uppercase tracking-widest relative">
+                Or email
+              </span>
+            </div>
+
+            {/* Auth Form */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {isSignUp && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-300">Full Name</label>
+                  <div className="relative flex items-center">
+                    <User className="w-4 h-4 text-slate-500 absolute left-3.5" />
+                    <input
+                      type="text"
+                      required
+                      placeholder="Jane Doe"
+                      value={name}
+                      onChange={(e) => {
+                        setName(e.target.value);
+                        setErrorMessage(null);
+                      }}
+                      className="w-full bg-white/[0.03] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-300">Email address</label>
+                <div className="relative flex items-center">
+                  <Mail className="w-4 h-4 text-slate-500 absolute left-3.5" />
+                  <input
+                    type="email"
+                    required
+                    placeholder="name@gmail.com or student@university.edu"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setErrorMessage(null);
+                    }}
+                    className="w-full bg-white/[0.03] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-slate-300">Password</label>
+                  {!isSignUp && (
+                    <button type="button" className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
+                <div className="relative flex items-center">
+                  <Lock className="w-4 h-4 text-slate-500 absolute left-3.5" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    placeholder="At least 6 characters"
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setErrorMessage(null);
+                    }}
+                    className="w-full bg-white/[0.03] border border-white/10 rounded-xl pl-10 pr-10 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 text-slate-500 hover:text-white transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white gap-2 font-semibold shadow-lg shadow-indigo-600/20 rounded-xl transition-all duration-200 mt-2"
+              >
+                {isLoading ? (
+                  <span>Authenticating...</span>
+                ) : (
+                  <>
+                    <span>{isSignUp ? 'Create Account' : 'Sign In'}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </Button>
+            </form>
+          </div>
+
+          {/* Footer Security Badge */}
+          <div className="flex items-center justify-center gap-2 text-xs text-slate-500 pt-4 border-t border-white/5">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span>End-to-End Encrypted Authentication</span>
+          </div>
+
         </div>
       </div>
     </div>
