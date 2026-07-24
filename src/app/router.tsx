@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppShell } from './AppShell';
 import { DashboardPage } from '@/pages/dashboard/Dashboard';
+import { LoginPage } from '@/pages/auth/LoginPage';
 import { ROUTES } from '@/constants/routes';
 
 const Placeholder = ({ title }: { title: string }) => (
@@ -16,6 +17,17 @@ const Placeholder = ({ title }: { title: string }) => (
 );
 
 export const router = createBrowserRouter([
+  // Public Root & Auth Routes
+  {
+    path: '/',
+    element: <LoginPage />,
+  },
+  {
+    path: '/login',
+    element: <LoginPage />,
+  },
+
+  // Main Authenticated Application Routes
   {
     path: '/',
     element: <AppShell />,
@@ -25,10 +37,6 @@ export const router = createBrowserRouter([
       </div>
     ),
     children: [
-      {
-        index: true,
-        element: <Placeholder title="Landing Page" />,
-      },
       {
         path: ROUTES.APP.ROOT,
         children: [

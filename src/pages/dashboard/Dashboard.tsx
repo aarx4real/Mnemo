@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Brain, 
   Plus, 
@@ -10,7 +11,11 @@ import {
   ArrowUpRight, 
   MessageSquareText, 
   TrendingUp, 
-  Bell 
+  Bell,
+  Settings,
+  LogOut,
+  User,
+  CheckCircle2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -55,7 +60,31 @@ const SAMPLE_MEMORIES: MemoryCard[] = [
 ];
 
 export const DashboardPage: React.FC = () => {
+  const navigate = useNavigate();
   const [quickInput, setQuickInput] = useState('');
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [user, setUser] = useState<{ email: string; name: string; provider?: string }>({
+    email: 'user@gmail.com',
+    name: 'Google User',
+  });
+
+  // Load active user from localStorage on mount
+  useEffect(() => {
+    const storedUser = localStorage.getItem('mnemo_user');
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (e) {
+        console.error('Failed to parse user session', e);
+      }
+    }
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('mnemo_user');
+    localStorage.removeItem('mnemo_token');
+    navigate('/login');
+  };
 
   const handleCapture = (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,33 +93,105 @@ export const DashboardPage: React.FC = () => {
     setQuickInput('');
   };
 
+  // Get User Avatar Initial
+  const userInitial = user.name ? user.name.charAt(0).toUpperCase() : 'U';
+
   return (
     <div className="max-w-7xl mx-auto p-6 md:p-8 space-y-8">
       {/* Top Banner / Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-border">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-border">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold uppercase tracking-wider mb-2">
             <Sparkles className="w-3.5 h-3.5" />
             AI Context Engine Ready
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-text-primary">
-            Welcome back to Mnemo
+            Welcome back, {user.name}
           </h1>
           <p className="text-text-secondary text-sm mt-1">
             Your personal second brain is actively indexing 142 memories.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* Action Controls & User Settings Bar */}
+        <div className="flex items-center gap-3 relative">
           <Button variant="outline" size="sm" className="gap-2">
             <Bell className="w-4 h-4 text-text-secondary" />
-            <span>Reminders</span>
+            <span className="hidden sm:inline">Reminders</span>
             <span className="ml-1 px-1.5 py-0.5 text-xs bg-primary text-white rounded-full">3</span>
           </Button>
+
           <Button size="sm" className="gap-2">
             <Plus className="w-4 h-4" />
-            New Memory
+            <span className="hidden sm:inline">New Memory</span>
           </Button>
+
+          {/* Settings Button */}
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => navigate('/app/settings')}
+            title="Dashboard Settings"
+            className="p-2.5"
+          >
+            <Settings className="w-4 h-4 text-text-secondary hover:text-text-primary" />
+          </Button>
+
+          {/* User Account Profile Pill */}
+          <div className="relative">
+            <button
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className="flex items-center gap-2 p-1.5 rounded-xl bg-surface border border-border hover:border-primary/50 transition-all focus:outline-none focus:ring-2 focus:ring-primary/40"
+            >
+              <div className="w-7 h-7 rounded-lg bg-primary text-white flex items-center justify-center font-bold text-xs shadow-sm">
+                {userInitial}
+              </div>
+              <span className="text-xs font-medium text-text-primary max-w-[100px] truncate hidden md:inline-block">
+                {user.email}
+              </span>
+            </button>
+
+            {/* Profile Dropdown Popup */}
+            {showProfileMenu && (
+              <div className="absolute right-0 mt-2 w-64 bg-surface border border-border rounded-xl shadow-2xl p-4 z-50 space-y-3 animate-in fade-in zoom-in-95 duration-100">
+                <div className="flex items-center gap-3 pb-3 border-b border-border">
+                  <div className="w-10 h-10 rounded-xl bg-primary text-white flex items-center justify-center font-bold text-base">
+                    {userInitial}
+                  </div>
+                  <div className="flex-1 truncate">
+                    <div className="text-sm font-semibold text-text-primary truncate">{user.name}</div>
+                    <div className="text-xs text-text-muted truncate">{user.email}</div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 text-xs text-success bg-success/10 px-2.5 py-1.5 rounded-lg border border-success/20">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span className="capitalize">Signed in via {user.provider || 'Google'}</span>
+                </div>
+
+                <div className="space-y-1 pt-1">
+                  <button
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      navigate('/app/settings');
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-hover rounded-lg transition-colors text-left"
+                  >
+                    <Settings className="w-4 h-4 text-text-muted" />
+                    <span> Account Settings</span>
+                  </button>
+
+                  <button
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-error hover:bg-error/10 rounded-lg transition-colors text-left"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span> Log Out</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
