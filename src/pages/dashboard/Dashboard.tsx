@@ -1,511 +1,747 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Brain,
-  Sparkles,
   Search,
-  Zap,
-  BookOpen,
-  Clock,
-  ChevronRight,
-  Compass,
-  Layers,
-  ShieldCheck,
-  Flame,
-  CheckCircle2,
-  AlertTriangle,
-  Folder,
-  Send,
-  FileText,
-  Plus,
-  Command,
   X,
-  Bot,
-  Activity,
-  TrendingUp,
+  Brain,
+  Calendar,
+  Tag,
+  Clock,
+  Bell,
+  Star,
+  Shuffle,
+  Menu,
+  Sun,
+  Moon,
+  User,
+  Settings,
+  ChevronRight,
+  CheckCircle2,
   Bookmark,
-  Share2,
-  RotateCcw
+  Sparkles,
+  ArrowRight,
+  Layers,
+  LogOut
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { QuickCaptureModal, NewMemoryData } from '@/components/dashboard/QuickCaptureModal';
 
-interface MemoryItem {
+// Data Models
+export interface MemoryItem {
   id: string;
   title: string;
   summary: string;
   category: string;
-  source: string;
+  date: string;
   timeAgo: string;
-  aiConfidence: number;
-  decayDaysLeft: number;
   tags: string[];
-  isPinned?: boolean;
+  isPriority?: boolean;
 }
 
+export interface ReminderItem {
+  id: string;
+  title: string;
+  dueDate: string;
+  dueTime: string;
+  category: string;
+  isUrgent?: boolean;
+  completed?: boolean;
+}
+
+// Dummy Data
 const INITIAL_MEMORIES: MemoryItem[] = [
   {
-    id: 'mem-1',
+    id: '1',
     title: 'React 19 Server Actions & Optimistic UI Patterns',
-    summary: 'Implementation details for useOptimistic hook and form actions handling state transitions seamlessly without blocking spinners.',
+    summary: 'Implementation details for useOptimistic hook and form actions handling state transitions seamlessly.',
     category: 'Engineering',
-    source: 'GitHub / RFC-419',
-    timeAgo: '12m ago',
-    aiConfidence: 98,
-    decayDaysLeft: 14,
-    tags: ['React', 'Frontend', 'Architecture'],
-    isPinned: true,
+    date: '2026-07-25',
+    timeAgo: 'Today',
+    tags: ['React', 'Frontend', 'WebDev'],
+    isPriority: true,
   },
   {
-    id: 'mem-2',
+    id: '2',
     title: 'Vector Embeddings & Semantic Search in Postgres',
     summary: 'PGVector index strategies: HNSW vs IVFFlat. HNSW provides higher recall with slight index build time tradeoff.',
     category: 'AI Research',
-    source: 'arxiv.org/abs/2308.11',
-    timeAgo: '2h ago',
-    aiConfidence: 94,
-    decayDaysLeft: 3,
+    date: '2026-07-20',
+    timeAgo: '5 days ago',
     tags: ['PostgreSQL', 'Vectors', 'RAG'],
+    isPriority: true,
   },
   {
-    id: 'mem-3',
+    id: '3',
     title: 'Attention Mechanism & Transformer Query-Key Matrices',
-    summary: 'Mathematical breakdown of scaled dot-product attention formula Softmax((QK^T)/sqrt(d_k))V and context projections.',
+    summary: 'Mathematical breakdown of scaled dot-product attention formula and context projections.',
     category: 'AI Research',
-    source: 'Notion Import',
-    timeAgo: '1d ago',
-    aiConfidence: 91,
-    decayDaysLeft: 21,
+    date: '2026-07-15',
+    timeAgo: '10 days ago',
     tags: ['Transformers', 'Math', 'LLMs'],
   },
   {
-    id: 'mem-4',
-    title: 'Designing Data-Intensive Applications: Consensus Algorithms',
+    id: '4',
+    title: 'Designing Data-Intensive Applications: Raft vs Paxos',
     summary: 'Analysis of Raft vs Paxos in distributed systems, leader election timeouts, and split-brain prevention.',
     category: 'Books',
-    source: 'O\'Reilly Reader',
-    timeAgo: '3d ago',
-    aiConfidence: 89,
-    decayDaysLeft: 5,
-    tags: ['Distributed Systems', 'Database', 'Architecture'],
+    date: '2026-06-30',
+    timeAgo: '1 month ago',
+    tags: ['Architecture', 'Distributed Systems'],
+  },
+  {
+    id: '5',
+    title: 'CSS Container Queries vs Media Queries',
+    summary: 'Using container queries for modular micro-frontend components that adapt to parent container size.',
+    category: 'Engineering',
+    date: '2026-05-12',
+    timeAgo: '2 months ago',
+    tags: ['CSS', 'Responsive', 'UI'],
   }
 ];
 
-export const Dashboard: React.FC = () => {
+const INITIAL_REMINDERS: ReminderItem[] = [
+  {
+    id: 'rem-1',
+    title: 'Review System Design architecture notes for interview prep',
+    dueDate: '2026-07-26',
+    dueTime: '10:00 AM',
+    category: 'Engineering',
+    isUrgent: true,
+  },
+  {
+    id: 'rem-2',
+    title: 'Re-read Transformer Query-Key Matrices paper before weekly sync',
+    dueDate: '2026-07-27',
+    dueTime: '02:30 PM',
+    category: 'AI Research',
+    isUrgent: true,
+  },
+  {
+    id: 'rem-3',
+    title: 'Update local Postgres PGVector Docker image',
+    dueDate: '2026-07-30',
+    dueTime: '06:00 PM',
+    category: 'DevOps',
+    isUrgent: false,
+  }
+];
+
+export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
-  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Core States
-  const [memories, setMemories] = useState<MemoryItem[]>(() => {
-    const saved = localStorage.getItem('mnemo_memories');
-    return saved ? JSON.parse(saved) : INITIAL_MEMORIES;
-  });
-
-  const [activeBriefTab, setActiveBriefTab] = useState<'synthesis' | 'retention' | 'focus'>('synthesis');
-  const [searchScope, setSearchScope] = useState<'all' | 'research' | 'code' | 'books'>('all');
-  const [query, setQuery] = useState('');
+  // Navigation & View State
+  const [activeView, setActiveView] = useState<'dashboard' | 'memories' | 'reminders' | 'settings'>('dashboard');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   
-  // Modals & AI State
-  const [isCaptureModalOpen, setIsCaptureModalOpen] = useState(false);
-  const [aiSynthesisResponse, setAiSynthesisResponse] = useState<string | null>(null);
-  const [isSynthesizing, setIsSynthesizing] = useState(false);
+  // Data State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [memories] = useState<MemoryItem[]>(INITIAL_MEMORIES);
+  const [reminders, setReminders] = useState<ReminderItem[]>(INITIAL_REMINDERS);
 
-  // User details
-  const storedUser = JSON.parse(localStorage.getItem('mnemo_user') || '{"name": "Aarush Gupta"}');
-  const firstName = storedUser.name ? storedUser.name.split(' ')[0] : 'Aarush';
-
-  // Persist to local storage on memory update
-  useEffect(() => {
-    localStorage.setItem('mnemo_memories', JSON.stringify(memories));
+  // Daily Random Memories (Picks 2 memories for daily rediscovery)
+  const dailyForgottenMemories = useMemo(() => {
+    return [...memories].sort(() => 0.5 - Math.random()).slice(0, 2);
   }, [memories]);
 
-  // Keyboard Listener (⌘K for Search, ⌘N for Capture)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
-        e.preventDefault();
-        setIsCaptureModalOpen(true);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  // Save Capture Handler
-  const handleSaveMemory = (newMem: NewMemoryData) => {
-    const item: MemoryItem = {
-      id: 'mem-' + Date.now(),
-      title: newMem.title,
-      summary: newMem.summary,
-      category: newMem.category,
-      source: newMem.source,
-      timeAgo: 'Just now',
-      aiConfidence: 99,
-      decayDaysLeft: 30,
-      tags: newMem.tags,
-    };
-
-    setMemories((prev) => [item, ...prev]);
-  };
-
-  // AI Synthesis Trigger
-  const handleSynthesize = () => {
-    if (!query.trim()) return;
-    setIsSynthesizing(true);
-    setAiSynthesisResponse(null);
-
-    setTimeout(() => {
-      setIsSynthesizing(false);
-      setAiSynthesisResponse(
-        `Synthesized knowledge across ${filteredMemories.length} indexed items for "${query}":\n\n` +
-        `• Core Finding: Matches primary entries in ${searchScope === 'all' ? 'Engineering & Research' : searchScope}.\n` +
-        `• Direct Insight: Your memory index suggests referencing optimistic UI patterns alongside vector embeddings to optimize real-time querying.\n` +
-        `• Retention Status: All associated memories are above 85% neural retention.`
+  // Search Filter
+  const searchedMemories = useMemo(() => {
+    if (!searchQuery.trim()) return memories;
+    const q = searchQuery.toLowerCase().trim();
+    return memories.filter((mem) => {
+      return (
+        mem.title.toLowerCase().includes(q) ||
+        mem.summary.toLowerCase().includes(q) ||
+        mem.category.toLowerCase().includes(q) ||
+        mem.date.includes(q) ||
+        mem.tags.some((tag) => tag.toLowerCase().includes(q))
       );
-    }, 750);
+    });
+  }, [memories, searchQuery]);
+
+  const toggleReminder = (id: string) => {
+    setReminders((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, completed: !r.completed } : r))
+    );
   };
 
-  // Memory Filter Calculation
-  const filteredMemories = memories.filter((mem) => {
-    if (searchScope === 'research' && mem.category !== 'AI Research' && mem.category !== 'Deep Learning') return false;
-    if (searchScope === 'code' && mem.category !== 'Engineering') return false;
-    if (searchScope === 'books' && mem.category !== 'Books') return false;
-
-    if (!query.trim()) return true;
-    const q = query.toLowerCase();
-    return (
-      mem.title.toLowerCase().includes(q) ||
-      mem.summary.toLowerCase().includes(q) ||
-      mem.tags.some((t) => t.toLowerCase().includes(q))
-    );
-  });
+  const isDark = theme === 'dark';
 
   return (
-    <div className="min-h-screen bg-[#05070B] text-slate-100 font-sans selection:bg-indigo-500/30 selection:text-indigo-200">
+    <div className={`min-h-screen font-sans transition-colors duration-200 ${
+      isDark ? 'bg-[#0f0f0f] text-slate-100' : 'bg-slate-50 text-slate-900'
+    }`}>
       
-      {/* BACKGROUND AMBIENT LIGHTS */}
-      <div className="fixed top-0 left-1/4 w-[600px] h-[350px] bg-indigo-600/10 rounded-full blur-[140px] pointer-events-none" />
-      <div className="fixed bottom-10 right-10 w-[500px] h-[400px] bg-purple-600/10 rounded-full blur-[150px] pointer-events-none" />
+      {/* AMBIENT BACKGROUND GLOW */}
+      {isDark && (
+        <div className="fixed top-[-100px] left-1/2 -translate-x-1/2 w-[800px] h-[350px] bg-indigo-600/10 rounded-full blur-[160px] pointer-events-none" />
+      )}
 
-      {/* TOP NAVBAR */}
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#05070B]/80 backdrop-blur-xl px-4 lg:px-8 py-3.5 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => navigate('/app/dashboard')}>
-            <div className="p-2 bg-indigo-500/10 border border-indigo-500/25 rounded-xl text-indigo-400 shadow-inner">
-              <Brain className="w-5 h-5" />
-            </div>
-            <span className="font-bold text-lg tracking-tight text-white">Mnemo</span>
+      {/* TOP NAVIGATION BAR (YOUTUBE STYLE) */}
+      <header className={`sticky top-0 z-40 backdrop-blur-md border-b px-4 md:px-8 py-3 flex items-center justify-between gap-4 ${
+        isDark ? 'bg-[#0f0f0f]/90 border-white/10' : 'bg-white/90 border-slate-200'
+      }`}>
+        
+        {/* Left: Brand Logo */}
+        <div 
+          className="flex items-center gap-2.5 cursor-pointer shrink-0" 
+          onClick={() => {
+            setActiveView('dashboard');
+            setSearchQuery('');
+          }}
+        >
+          <div className="p-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-indigo-400">
+            <Brain className="w-5 h-5" />
           </div>
-
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Neural Engine Active</span>
-          </div>
+          <span className={`font-bold text-lg tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+            Mnemo
+          </span>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Button
-            onClick={() => setIsCaptureModalOpen(true)}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white gap-2 font-semibold text-xs px-3.5 py-2 rounded-xl shadow-lg shadow-indigo-600/20 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Quick Capture</span>
-            <kbd className="hidden md:inline-block text-[10px] bg-white/20 px-1.5 py-0.5 rounded text-white/90">⌘N</kbd>
-          </Button>
-
-          <div className="h-4 w-px bg-white/10 mx-1 hidden sm:block" />
-
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center font-semibold text-xs text-white shadow-md">
-            {firstName.charAt(0)}
+        {/* Center: YouTube-style Search Bar */}
+        <div className="flex-1 max-w-2xl mx-auto flex items-center">
+          <div className="relative flex-1 flex items-center">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search memories by keyword, tag, or date..."
+              className={`w-full border rounded-l-full py-2.5 pl-5 pr-10 text-sm focus:outline-none transition-all ${
+                isDark 
+                  ? 'bg-[#121212] border-[#303030] text-white placeholder-zinc-500 focus:border-indigo-500' 
+                  : 'bg-slate-100 border-slate-300 text-slate-900 placeholder-slate-400 focus:border-indigo-600'
+              }`}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 text-zinc-400 hover:text-white p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
+
+          <button
+            onClick={() => setActiveView('memories')}
+            className={`border border-l-0 px-6 py-2.5 rounded-r-full transition-colors flex items-center justify-center shrink-0 ${
+              isDark 
+                ? 'bg-[#222222] border-[#303030] hover:bg-[#272727] text-zinc-300' 
+                : 'bg-slate-200 border-slate-300 hover:bg-slate-300 text-slate-700'
+            }`}
+            title="Search"
+          >
+            <Search className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Right: Sidebar Toggle Icon */}
+        <div className="flex items-center gap-3 shrink-0">
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            className={`p-2.5 rounded-xl border transition-all flex items-center gap-2 ${
+              isDark 
+                ? 'bg-[#181818] border-[#303030] hover:bg-[#222222] text-zinc-300' 
+                : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-700'
+            }`}
+            title="Open Menu & Settings"
+          >
+            <Menu className="w-5 h-5" />
+            <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-[10px] font-bold text-white">
+              A
+            </div>
+          </button>
         </div>
       </header>
 
-      {/* MAIN CONTAINER */}
-      <main className="max-w-[1600px] mx-auto px-4 lg:px-8 py-8 space-y-8 relative z-10">
-        
-        {/* HERO BRIEFING & SYNTHESIZER BAR */}
-        <section className="relative rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.05] via-white/[0.02] to-transparent p-6 lg:p-8 backdrop-blur-2xl shadow-2xl overflow-hidden space-y-6">
-          
-          {/* Header Greeting & Tabs */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-5">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-xs text-indigo-400 font-semibold tracking-wide uppercase">
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>AI Morning Briefing</span>
-              </div>
-              <h1 className="text-2xl lg:text-3xl font-extrabold text-white tracking-tight">
-                Good morning, {firstName}. Here is your neural summary.
-              </h1>
-            </div>
+      {/* RIGHT SIDEBAR / DRAWER */}
+      {isSidebarOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+            onClick={() => setIsSidebarOpen(false)}
+          />
 
-            {/* Briefing Switcher Tabs */}
-            <div className="flex items-center gap-1.5 p-1 bg-black/40 border border-white/10 rounded-xl text-xs font-medium">
-              <button
-                onClick={() => setActiveBriefTab('synthesis')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
-                  activeBriefTab === 'synthesis' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Daily Synthesis
-              </button>
-              <button
-                onClick={() => setActiveBriefTab('retention')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
-                  activeBriefTab === 'retention' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Retention Gaps
-              </button>
-              <button
-                onClick={() => setActiveBriefTab('focus')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
-                  activeBriefTab === 'focus' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Suggested Focus
-              </button>
-            </div>
-          </div>
-
-          {/* BRIEFING CARD CONTENT AREA */}
-          {activeBriefTab === 'synthesis' && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-1.5">
-                <div className="flex items-center gap-2 text-indigo-400 font-semibold">
-                  <Activity className="w-4 h-4" />
-                  <span>Index Growth</span>
+          {/* Drawer Content */}
+          <div className={`relative w-80 max-w-full h-full border-l p-6 flex flex-col justify-between z-10 shadow-2xl transition-all duration-300 ${
+            isDark ? 'bg-[#121212] border-white/10 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
+          }`}>
+            <div className="space-y-6">
+              {/* Drawer Header */}
+              <div className="flex items-center justify-between border-b pb-4 border-zinc-800">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white shadow-md">
+                    A
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm">Account Settings</h4>
+                    <p className="text-xs text-zinc-400">aarush@example.com</p>
+                  </div>
                 </div>
-                <p className="text-xl font-bold text-white">{memories.length} Memories</p>
-                <p className="text-slate-400 text-[11px]">Synced across your neural knowledge base.</p>
-              </div>
 
-              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-1.5">
-                <div className="flex items-center gap-2 text-emerald-400 font-semibold">
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Memory Health</span>
-                </div>
-                <p className="text-xl font-bold text-white">94% Retention</p>
-                <p className="text-slate-400 text-[11px]">Spaced repetition schedule optimal.</p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-1.5">
-                <div className="flex items-center gap-2 text-amber-400 font-semibold">
-                  <Flame className="w-4 h-4" />
-                  <span>Learning Streak</span>
-                </div>
-                <p className="text-xl font-bold text-white">12 Days</p>
-                <p className="text-slate-400 text-[11px]">Consistent indexing & quick captures.</p>
-              </div>
-            </div>
-          )}
-
-          {activeBriefTab === 'retention' && (
-            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-200 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
-                <div>
-                  <p className="font-bold text-white">Vector Search Indexes memory is decaying</p>
-                  <p className="text-amber-300/80 text-[11px]">Memory memory retention dropped to 62%. Recommended review due today.</p>
-                </div>
-              </div>
-              <Button size="sm" className="bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs rounded-xl">
-                Review Now
-              </Button>
-            </div>
-          )}
-
-          {activeBriefTab === 'focus' && (
-            <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-200 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Compass className="w-5 h-5 text-indigo-400 shrink-0" />
-                <div>
-                  <p className="font-bold text-white">Focus Target: Master React 19 State Optimizations</p>
-                  <p className="text-indigo-300/80 text-[11px]">You spent 3 hours researching server actions this week.</p>
-                </div>
-              </div>
-              <Button size="sm" className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-xl">
-                Open Reader
-              </Button>
-            </div>
-          )}
-
-          {/* UNIVERSAL SYNTHESIZER SEARCH INPUT */}
-          <div className="space-y-3 pt-2">
-            <div className="relative flex items-center">
-              <Search className="w-5 h-5 text-indigo-400 absolute left-4 pointer-events-none" />
-
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSynthesize()}
-                placeholder="Ask Mnemo anything or filter memories (Press ⌘K to focus)..."
-                className="w-full bg-black/60 border border-white/15 rounded-2xl pl-12 pr-36 py-4 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all shadow-inner"
-              />
-
-              <div className="absolute right-3 flex items-center gap-2">
-                <Button
-                  onClick={handleSynthesize}
-                  disabled={isSynthesizing || !query.trim()}
-                  size="sm"
-                  className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl px-3 py-1.5 gap-1.5"
+                <button 
+                  onClick={() => setIsSidebarOpen(false)}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800"
                 >
-                  <span>{isSynthesizing ? 'Synthesizing...' : 'Synthesize'}</span>
-                  <Send className="w-3.5 h-3.5" />
-                </Button>
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-            </div>
 
-            {/* Scope Filter Buttons */}
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-1.5 text-slate-400">
-                <span className="text-[11px] font-medium text-slate-500 mr-1">Scope:</span>
-                {(['all', 'research', 'code', 'books'] as const).map((scope) => (
+              {/* Theme Switcher */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                  Appearance Mode
+                </label>
+                <div className={`grid grid-cols-2 p-1 rounded-xl border ${
+                  isDark ? 'bg-black/40 border-zinc-800' : 'bg-slate-100 border-slate-200'
+                }`}>
                   <button
-                    key={scope}
-                    onClick={() => setSearchScope(scope)}
-                    className={`px-2.5 py-1 rounded-lg capitalize transition-all ${
-                      searchScope === scope
-                        ? 'bg-indigo-600/30 text-indigo-200 border border-indigo-500/40 font-medium'
-                        : 'text-slate-400 hover:text-slate-200'
+                    onClick={() => setTheme('dark')}
+                    className={`flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold transition-all ${
+                      isDark ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-500 hover:text-zinc-900'
                     }`}
                   >
-                    {scope}
+                    <Moon className="w-3.5 h-3.5" />
+                    Dark
                   </button>
-                ))}
+                  <button
+                    onClick={() => setTheme('light')}
+                    className={`flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold transition-all ${
+                      !isDark ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    <Sun className="w-3.5 h-3.5" />
+                    Light
+                  </button>
+                </div>
               </div>
 
-              <div className="hidden lg:flex items-center gap-2 text-slate-500 text-[11px]">
-                <span className="flex items-center gap-1 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded font-mono text-slate-400">
-                  <Command className="w-3 h-3" /> K
-                </span>
-                <span>search</span>
-                <span>•</span>
-                <span className="flex items-center gap-1 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded font-mono text-slate-400">
-                  <Command className="w-3 h-3" /> N
-                </span>
-                <span>capture</span>
-              </div>
-            </div>
+              {/* Sidebar Navigation */}
+              <div className="space-y-1.5 pt-2">
+                <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-2">
+                  Pages & Views
+                </label>
 
-            {/* AI SYNTHESIS RESULT BOX */}
-            {aiSynthesisResponse && (
-              <div className="p-4 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 text-xs text-indigo-100 space-y-2 relative animate-in fade-in duration-200">
                 <button
-                  onClick={() => setAiSynthesisResponse(null)}
-                  className="absolute top-3 right-3 text-indigo-300 hover:text-white"
+                  onClick={() => {
+                    setActiveView('dashboard');
+                    setIsSidebarOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
+                    activeView === 'dashboard' 
+                      ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/30' 
+                      : 'hover:bg-zinc-800/50 text-zinc-300'
+                  }`}
                 >
-                  <X className="w-4 h-4" />
+                  <Brain className="w-4 h-4 text-indigo-400" />
+                  <span>Dashboard Home</span>
                 </button>
 
-                <div className="flex items-center gap-2 font-bold text-indigo-400">
-                  <Bot className="w-4 h-4" />
-                  <span>Mnemo AI Synthesis Result</span>
-                </div>
+                <button
+                  onClick={() => {
+                    setActiveView('memories');
+                    setIsSidebarOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
+                    activeView === 'memories' 
+                      ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/30' 
+                      : 'hover:bg-zinc-800/50 text-zinc-300'
+                  }`}
+                >
+                  <Layers className="w-4 h-4 text-purple-400" />
+                  <span>All Memories ({memories.length})</span>
+                </button>
 
-                <p className="whitespace-pre-line text-slate-300 leading-relaxed font-mono">
-                  {aiSynthesisResponse}
-                </p>
+                <button
+                  onClick={() => {
+                    setActiveView('reminders');
+                    setIsSidebarOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
+                    activeView === 'reminders' 
+                      ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/30' 
+                      : 'hover:bg-zinc-800/50 text-zinc-300'
+                  }`}
+                >
+                  <Bell className="w-4 h-4 text-amber-400" />
+                  <span>Reminders & Priority ({reminders.length})</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveView('settings');
+                    setIsSidebarOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
+                    activeView === 'settings' 
+                      ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/30' 
+                      : 'hover:bg-zinc-800/50 text-zinc-300'
+                  }`}
+                >
+                  <Settings className="w-4 h-4 text-slate-400" />
+                  <span>Account & Profile</span>
+                </button>
               </div>
-            )}
-          </div>
-
-        </section>
-
-        {/* INDEXED MEMORIES GRID */}
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Compass className="w-4 h-4 text-indigo-400" />
-              <h3 className="text-sm font-bold tracking-tight text-white uppercase">
-                Indexed Memories ({filteredMemories.length})
-              </h3>
             </div>
-            {query && (
+
+            {/* Bottom Actions */}
+            <div className="pt-4 border-t border-zinc-800">
+              <button 
+                onClick={() => navigate('/login')}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-medium transition-all"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Log Out</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MAIN CONTAINER */}
+      <main className="max-w-7xl mx-auto px-4 md:px-8 py-8 space-y-10 relative z-10">
+        
+        {/* SEARCH OVERRIDE RESULTS VIEW */}
+        {searchQuery.trim() ? (
+          <section className="space-y-4 animate-in fade-in duration-200">
+            <div className="flex items-center justify-between border-b pb-4 border-zinc-800">
+              <h2 className="text-lg font-bold flex items-center gap-2">
+                <Search className="w-5 h-5 text-indigo-400" />
+                <span>Search Results for "{searchQuery}"</span>
+              </h2>
               <button
-                onClick={() => setQuery('')}
+                onClick={() => setSearchQuery('')}
                 className="text-xs text-indigo-400 hover:underline"
               >
-                Clear Filter
+                Clear Search
               </button>
-            )}
-          </div>
+            </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredMemories.map((mem) => (
-              <div
-                key={mem.id}
-                className="p-5 rounded-2xl bg-[#0B0F17] border border-white/10 hover:border-indigo-500/30 transition-all space-y-3 flex flex-col justify-between group"
-              >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs text-slate-400">
-                    <span className="px-2.5 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-medium">
-                      {mem.category}
-                    </span>
-                    <span className="text-[11px] text-slate-500">{mem.timeAgo}</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {searchedMemories.map((mem) => (
+                <MemoryCard key={mem.id} mem={mem} isDark={isDark} />
+              ))}
+
+              {searchedMemories.length === 0 && (
+                <div className="col-span-full py-16 text-center text-zinc-500 text-xs space-y-2">
+                  <p>No matching memories found for "{searchQuery}".</p>
+                </div>
+              )}
+            </div>
+          </section>
+        ) : (
+          <>
+            {/* VIEW 1: MAIN DASHBOARD */}
+            {activeView === 'dashboard' && (
+              <>
+                {/* SECTION 1: REMINDERS & PRIORITY MEMORIES */}
+                <section className="space-y-4">
+                  <div className="flex items-center justify-between border-b pb-3 border-zinc-800">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-400">
+                        <Bell className="w-4 h-4" />
+                      </div>
+                      <h2 className="font-bold text-base tracking-tight">Reminders & Priority Items</h2>
+                    </div>
+
+                    <button
+                      onClick={() => setActiveView('reminders')}
+                      className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-all"
+                    >
+                      <span>View All Reminders</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
                   </div>
 
-                  <h4 className="text-sm font-semibold text-white group-hover:text-indigo-300 transition-colors line-clamp-2">
-                    {mem.title}
-                  </h4>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* Active Reminders Quick List */}
+                    <div className={`lg:col-span-1 p-5 rounded-2xl border flex flex-col justify-between space-y-4 ${
+                      isDark ? 'bg-[#141414] border-[#262626]' : 'bg-white border-slate-200'
+                    }`}>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                          <span>Upcoming Deadlines</span>
+                          <span className="text-amber-400">{reminders.length} Active</span>
+                        </div>
 
-                  <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">
-                    {mem.summary}
-                  </p>
-                </div>
+                        <div className="space-y-2.5">
+                          {reminders.slice(0, 3).map((r) => (
+                            <div
+                              key={r.id}
+                              onClick={() => toggleReminder(r.id)}
+                              className={`p-3 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${
+                                r.completed
+                                  ? 'opacity-50 line-through bg-zinc-900/40 border-zinc-800'
+                                  : isDark 
+                                    ? 'bg-[#1a1a1a] border-[#2a2a2a] hover:border-amber-500/30' 
+                                    : 'bg-slate-50 border-slate-200'
+                              }`}
+                            >
+                              <CheckCircle2 className={`w-4 h-4 mt-0.5 shrink-0 ${
+                                r.completed ? 'text-emerald-400' : 'text-zinc-500'
+                              }`} />
+                              <div className="space-y-0.5 flex-1 min-w-0">
+                                <p className="text-xs font-medium truncate">{r.title}</p>
+                                <p className="text-[10px] text-zinc-500 font-mono">
+                                  Due: {r.dueDate} at {r.dueTime}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
 
-                <div className="pt-3 border-t border-white/5 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-1">
-                    {mem.tags.slice(0, 2).map((t) => (
-                      <span key={t} className="text-[10px] text-slate-400 bg-white/5 px-2 py-0.5 rounded-md">
-                        #{t}
-                      </span>
+                      <button
+                        onClick={() => setActiveView('reminders')}
+                        className="w-full py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold rounded-xl transition-all"
+                      >
+                        Manage All Reminders
+                      </button>
+                    </div>
+
+                    {/* Priority Memories */}
+                    <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {memories.filter((m) => m.isPriority).map((mem) => (
+                        <MemoryCard key={mem.id} mem={mem} isDark={isDark} />
+                      ))}
+                    </div>
+                  </div>
+                </section>
+
+                {/* SECTION 2: DAILY DISCOVERY / FORGOTTEN MEMORIES */}
+                <section className="space-y-4 pt-4">
+                  <div className="flex items-center justify-between border-b pb-3 border-zinc-800">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-purple-500/10 border border-purple-500/20 rounded-lg text-purple-400">
+                        <Shuffle className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h2 className="font-bold text-base tracking-tight">Daily Discovery (Forgotten Memories)</h2>
+                        <p className="text-xs text-zinc-400">Randomly picked from your vault to trigger active recall.</p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setActiveView('memories')}
+                      className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-all"
+                    >
+                      <span>Explore All Vault</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {dailyForgottenMemories.map((mem) => (
+                      <div
+                        key={'daily-' + mem.id}
+                        className={`p-5 rounded-2xl border space-y-3 relative overflow-hidden transition-all group ${
+                          isDark 
+                            ? 'bg-gradient-to-br from-[#161320] via-[#121212] to-[#121212] border-purple-500/30 hover:border-purple-500/60' 
+                            : 'bg-gradient-to-br from-purple-50 via-white to-white border-purple-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="px-2.5 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/20 text-purple-300 font-medium flex items-center gap-1">
+                            <Sparkles className="w-3 h-3 text-purple-400" />
+                            Daily Recall
+                          </span>
+                          <span className="text-[11px] font-mono text-zinc-500">{mem.date}</span>
+                        </div>
+
+                        <h3 className="font-bold text-sm group-hover:text-purple-300 transition-colors">
+                          {mem.title}
+                        </h3>
+
+                        <p className="text-xs text-zinc-400 leading-relaxed line-clamp-2">
+                          {mem.summary}
+                        </p>
+
+                        <div className="pt-2 flex items-center justify-between text-[11px] text-zinc-500 border-t border-zinc-800/50">
+                          <span>Category: {mem.category}</span>
+                          <span className="text-purple-400 hover:underline cursor-pointer" onClick={() => setActiveView('memories')}>
+                            Open memory →
+                          </span>
+                        </div>
+                      </div>
                     ))}
                   </div>
-
-                  <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 font-mono">
-                    {mem.aiConfidence}% match
-                  </span>
-                </div>
-              </div>
-            ))}
-
-            {filteredMemories.length === 0 && (
-              <div className="col-span-full py-12 text-center text-slate-500 text-xs space-y-2">
-                <Search className="w-8 h-8 mx-auto opacity-40 text-slate-400" />
-                <p>No indexed memories match your search query or scope filter.</p>
-              </div>
+                </section>
+              </>
             )}
-          </div>
-        </section>
 
-        {/* FOOTER BADGE */}
-        <footer className="border-t border-white/10 pt-6 text-center text-xs text-slate-500 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Mnemo Neural Database Syncing</span>
-          </div>
-          <span>Version 2.4.0 • Step 1 Active</span>
-        </footer>
+            {/* VIEW 2: ALL MEMORIES PAGE */}
+            {activeView === 'memories' && (
+              <section className="space-y-6 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between border-b pb-4 border-zinc-800">
+                  <div>
+                    <h1 className="text-xl font-bold text-white flex items-center gap-2">
+                      <Layers className="w-5 h-5 text-purple-400" />
+                      <span>All Memories Vault</span>
+                    </h1>
+                    <p className="text-xs text-zinc-400">Total {memories.length} indexed knowledge cards in your second brain.</p>
+                  </div>
+
+                  <button
+                    onClick={() => setActiveView('dashboard')}
+                    className="text-xs text-indigo-400 hover:underline"
+                  >
+                    ← Back to Dashboard
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {memories.map((mem) => (
+                    <MemoryCard key={mem.id} mem={mem} isDark={isDark} />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* VIEW 3: REMINDERS PAGE */}
+            {activeView === 'reminders' && (
+              <section className="space-y-6 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between border-b pb-4 border-zinc-800">
+                  <div>
+                    <h1 className="text-xl font-bold text-white flex items-center gap-2">
+                      <Bell className="w-5 h-5 text-amber-400" />
+                      <span>Scheduled Reminders</span>
+                    </h1>
+                    <p className="text-xs text-zinc-400">Track tasks and review schedules across your memory base.</p>
+                  </div>
+
+                  <button
+                    onClick={() => setActiveView('dashboard')}
+                    className="text-xs text-indigo-400 hover:underline"
+                  >
+                    ← Back to Dashboard
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {reminders.map((r) => (
+                    <div
+                      key={r.id}
+                      onClick={() => toggleReminder(r.id)}
+                      className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+                        r.completed
+                          ? 'opacity-50 line-through bg-zinc-900/40 border-zinc-800'
+                          : isDark
+                            ? 'bg-[#141414] border-[#262626] hover:border-amber-500/40'
+                            : 'bg-white border-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <CheckCircle2 className={`w-5 h-5 ${r.completed ? 'text-emerald-400' : 'text-zinc-500'}`} />
+                        <div>
+                          <p className="text-sm font-semibold">{r.title}</p>
+                          <p className="text-xs text-zinc-400 font-mono">
+                            Due {r.dueDate} at {r.dueTime} • Category: {r.category}
+                          </p>
+                        </div>
+                      </div>
+
+                      <span className={`text-xs px-2.5 py-1 rounded-full border ${
+                        r.isUrgent ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+                      }`}>
+                        {r.isUrgent ? 'High Priority' : 'Normal'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* VIEW 4: ACCOUNT SETTINGS PAGE */}
+            {activeView === 'settings' && (
+              <section className="space-y-6 max-w-2xl animate-in fade-in duration-200">
+                <div className="border-b pb-4 border-zinc-800 flex items-center justify-between">
+                  <h1 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Settings className="w-5 h-5 text-slate-400" />
+                    <span>Account Settings</span>
+                  </h1>
+                  <button onClick={() => setActiveView('dashboard')} className="text-xs text-indigo-400 hover:underline">
+                    ← Back to Dashboard
+                  </button>
+                </div>
+
+                <div className={`p-6 rounded-2xl border space-y-4 ${isDark ? 'bg-[#141414] border-[#262626]' : 'bg-white border-slate-200'}`}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-2xl text-white">
+                      A
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-lg">Aarush Gupta</h3>
+                      <p className="text-xs text-zinc-400">aarush@example.com</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-zinc-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-zinc-300">Theme Preferences</span>
+                      <button 
+                        onClick={() => setTheme(isDark ? 'light' : 'dark')}
+                        className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg"
+                      >
+                        Switch to {isDark ? 'Light' : 'Dark'} Theme
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
+          </>
+        )}
 
       </main>
-
-      {/* QUICK CAPTURE MODAL */}
-      <QuickCaptureModal
-        isOpen={isCaptureModalOpen}
-        onClose={() => setIsCaptureModalOpen(false)}
-        onSave={handleSaveMemory}
-      />
-
     </div>
   );
 };
 
-export default Dashboard;
+// HELPER COMPONENT: MEMORY CARD
+const MemoryCard: React.FC<{ mem: MemoryItem; isDark: boolean }> = ({ mem, isDark }) => (
+  <div className={`p-5 rounded-2xl border flex flex-col justify-between space-y-4 transition-all duration-200 group hover:shadow-xl ${
+    isDark 
+      ? 'bg-[#141414] border-[#262626] hover:border-indigo-500/40 hover:shadow-indigo-500/5' 
+      : 'bg-white border-slate-200 hover:border-indigo-300'
+  }`}>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between text-xs">
+        <span className="px-2.5 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-medium">
+          {mem.category}
+        </span>
+        <div className="flex items-center gap-1.5 text-zinc-400 text-[11px] font-mono">
+          <Calendar className="w-3 h-3 text-zinc-500" />
+          <span>{mem.date}</span>
+        </div>
+      </div>
+
+      <h3 className="font-semibold text-sm group-hover:text-indigo-300 transition-colors line-clamp-2">
+        {mem.title}
+      </h3>
+
+      <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3">
+        {mem.summary}
+      </p>
+    </div>
+
+    <div className="pt-3 border-t border-zinc-800/60 flex items-center justify-between text-xs">
+      <div className="flex items-center gap-1 overflow-hidden">
+        {mem.tags.map((tag) => (
+          <span
+            key={tag}
+            className="text-[10px] text-zinc-400 bg-zinc-800/60 border border-zinc-700/50 px-2 py-0.5 rounded-md flex items-center gap-1 shrink-0"
+          >
+            <Tag className="w-2.5 h-2.5 text-zinc-500" />
+            {tag}
+          </span>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-1 text-[11px] text-zinc-500 shrink-0 font-mono">
+        <Clock className="w-3 h-3" />
+        <span>{mem.timeAgo}</span>
+      </div>
+    </div>
+  </div>
+);
+
+export default DashboardPage;

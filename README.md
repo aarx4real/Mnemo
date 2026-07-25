@@ -39,10 +39,3 @@ Ensure you have Node.js (v18+) installed on your machine.
 
 * Node.js: `>= 18.0.0`
 * npm: `>= 9.0.0`
-
-### Installation
-
-1. Clone the repository:
-   ```bash
-   git clone [https://github.com/YOUR_USERNAME/Mnemo.git](https://github.com/YOUR_USERNAME/Mnemo.git)
-   cd Mnemo
