@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { width: 320px; background-color: #0f0f0f; color: #f1f5f9; padding: 16px; }
+    
+    .header { display: flex; items-center; gap: 8px; margin-bottom: 14px; }
+    .header h2 { font-size: 15px; font-weight: 700; color: #818cf8; }
+
+    .form-group { margin-bottom: 12px; }
+    label { display: block; font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; margin-bottom: 4px; }
+    
+    input, textarea, select {
+      width: 100%;
+      background-color: #18181b;
+      border: 1px solid #27272a;
+      color: #f4f4f5;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      outline: none;
+    }
+    input:focus, textarea:focus, select:focus { border-color: #6366f1; }
+    
+    textarea { height: 60px; resize: none; }
+
+    .checkbox-group { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+    .checkbox-group input { width: auto; }
+
+    button {
+      width: 100%;
+      background-color: #4f46e5;
+      color: #ffffff;
+      border: none;
+      padding: 10px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 12px;
+      cursor: pointer;
+      margin-top: 6px;
+      transition: background 0.2s;
+    }
+    button:hover { background-color: #4338ca; }
+    button:disabled { background-color: #312e81; opacity: 0.6; cursor: not-allowed; }
+
+    #status { font-size: 11px; text-align: center; margin-top: 8px; }
+    .success { color: #4ade80; }
+    .error { color: #f87171; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>🧠 Mnemo Saver</h2>
+  </div>
+
+  <div class="form-group">
+    <label for="title">Title</label>
+    <input type="text" id="title" placeholder="Loading page title..." />
+  </div>
+
+  <div class="form-group">
+    <label for="category">Category</label>
+    <select id="category">
+      <option value="Engineering">Engineering</option>
+      <option value="AI Research">AI Research</option>
+      <option value="Web Clips" selected>Web Clips</option>
+      <option value="Books">Books</option>
+      <option value="General">General</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label for="summary">Summary / Notes</label>
+    <textarea id="summary" placeholder="Add a short summary or key insight..."></textarea>
+  </div>
+
+  <div class="form-group">
+    <label for="tags">Tags (comma separated)</label>
+    <input type="text" id="tags" value="Web, Chrome" />
+  </div>
+
+  <div class="form-group checkbox-group">
+    <input type="checkbox" id="isPriority" />
+    <label for="isPriority" style="text-transform: none; margin: 0;">Mark as Priority Memory</label>
+  </div>
+
+  <button id="saveBtn">Save Memory</button>
+  <div id="status"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

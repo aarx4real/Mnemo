@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search,
@@ -21,8 +21,11 @@ import {
   Sparkles,
   ArrowRight,
   Layers,
-  LogOut
+  LogOut,
+  ExternalLink,
+  RefreshCw
 } from 'lucide-react';
+import { supabase } from "../../lib/supabase";
 
 // Data Models
 export interface MemoryItem {
@@ -34,6 +37,7 @@ export interface MemoryItem {
   timeAgo: string;
   tags: string[];
   isPriority?: boolean;
+  sourceUrl?: string;
 }
 
 export interface ReminderItem {
@@ -46,7 +50,7 @@ export interface ReminderItem {
   completed?: boolean;
 }
 
-// Dummy Data
+// Fallback Initial Data (used if Supabase table is empty)
 const INITIAL_MEMORIES: MemoryItem[] = [
   {
     id: '1',
@@ -124,6 +128,40 @@ const INITIAL_REMINDERS: ReminderItem[] = [
   }
 ];
 
+// Data Converters (Database row to standard UI object)
+const mapDbMemoryToMemoryItem = (row: any): MemoryItem => {
+  const createdAt = row.created_at ? new Date(row.created_at) : new Date();
+  const formattedDate = row.date || createdAt.toISOString().split('T')[0];
+
+  return {
+    id: String(row.id),
+    title: row.title || 'Untitled Memory',
+    summary: row.summary || row.content || '',
+    category: row.category || 'General',
+    date: formattedDate,
+    timeAgo: row.time_ago || row.timeAgo || 'Recently',
+    tags: Array.isArray(row.tags)
+      ? row.tags
+      : row.tags
+      ? String(row.tags).split(',').map((t) => t.trim())
+      : [],
+    isPriority: Boolean(row.is_priority ?? row.isPriority ?? false),
+    sourceUrl: row.source_url || row.sourceUrl || undefined,
+  };
+};
+
+const mapDbReminderToReminderItem = (row: any): ReminderItem => {
+  return {
+    id: String(row.id),
+    title: row.title || 'Untitled Reminder',
+    dueDate: row.due_date || row.dueDate || new Date().toISOString().split('T')[0],
+    dueTime: row.due_time || row.dueTime || '12:00 PM',
+    category: row.category || 'General',
+    isUrgent: Boolean(row.is_urgent ?? row.isUrgent ?? false),
+    completed: Boolean(row.completed ?? false),
+  };
+};
+
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
 
@@ -131,15 +169,76 @@ export const DashboardPage: React.FC = () => {
   const [activeView, setActiveView] = useState<'dashboard' | 'memories' | 'reminders' | 'settings'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  
-  // Data State
-  const [searchQuery, setSearchQuery] = useState('');
-  const [memories] = useState<MemoryItem[]>(INITIAL_MEMORIES);
-  const [reminders, setReminders] = useState<ReminderItem[]>(INITIAL_REMINDERS);
 
-  // Daily Random Memories (Picks 2 memories for daily rediscovery)
+  // Data & Supabase State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [memories, setMemories] = useState<MemoryItem[]>(INITIAL_MEMORIES);
+  const [reminders, setReminders] = useState<ReminderItem[]>(INITIAL_REMINDERS);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  // Fetch initial data from Supabase
+  const fetchVaultData = async () => {
+    try {
+      setLoading(true);
+      const [memRes, remRes] = await Promise.all([
+        supabase.from('memories').select('*').order('created_at', { ascending: false }),
+        supabase.from('reminders').select('*').order('due_date', { ascending: true }),
+      ]);
+
+      if (memRes.data && memRes.data.length > 0) {
+        setMemories(memRes.data.map(mapDbMemoryToMemoryItem));
+      }
+      if (remRes.data && remRes.data.length > 0) {
+        setReminders(remRes.data.map(mapDbReminderToReminderItem));
+      }
+    } catch (err) {
+      console.warn('Using fallback data due to Supabase connection state:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchVaultData();
+
+    // Subscribe to Realtime DB updates (e.g., Chrome extension saving new memory)
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'memories' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const newMem = mapDbMemoryToMemoryItem(payload.new);
+          setMemories((prev) => [newMem, ...prev.filter((m) => m.id !== newMem.id)]);
+        } else if (payload.eventType === 'DELETE') {
+          setMemories((prev) => prev.filter((m) => m.id !== String(payload.old.id)));
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reminders' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const newRem = mapDbReminderToReminderItem(payload.new);
+          setReminders((prev) => [...prev, newRem]);
+        } else if (payload.eventType === 'UPDATE') {
+          const updatedRem = mapDbReminderToReminderItem(payload.new);
+          setReminders((prev) => prev.map((r) => (r.id === updatedRem.id ? updatedRem : r)));
+        } else if (payload.eventType === 'DELETE') {
+          setReminders((prev) => prev.filter((r) => r.id !== String(payload.old.id)));
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Daily Random Memories (Picks 2 memories for daily active recall)
   const dailyForgottenMemories = useMemo(() => {
     return [...memories].sort(() => 0.5 - Math.random()).slice(0, 2);
+  }, [memories]);
+
+  // Priority Memories Filter
+  const priorityMemories = useMemo(() => {
+    const priorityList = memories.filter((m) => m.isPriority);
+    return priorityList.length > 0 ? priorityList : memories.slice(0, 2);
   }, [memories]);
 
   // Search Filter
@@ -157,32 +256,46 @@ export const DashboardPage: React.FC = () => {
     });
   }, [memories, searchQuery]);
 
-  const toggleReminder = (id: string) => {
+  // Toggle Reminder Completion both locally & in Supabase
+  const toggleReminder = async (id: string) => {
+    const reminder = reminders.find((r) => r.id === id);
+    if (!reminder) return;
+
+    const nextState = !reminder.completed;
+
+    // Optimistic local update
     setReminders((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, completed: !r.completed } : r))
+      prev.map((r) => (r.id === id ? { ...r, completed: nextState } : r))
     );
+
+    // Sync to Supabase DB if not dummy item
+    if (!id.startsWith('rem-')) {
+      await supabase.from('reminders').update({ completed: nextState }).eq('id', id);
+    }
   };
 
   const isDark = theme === 'dark';
 
   return (
-    <div className={`min-h-screen font-sans transition-colors duration-200 ${
-      isDark ? 'bg-[#0f0f0f] text-slate-100' : 'bg-slate-50 text-slate-900'
-    }`}>
-      
+    <div
+      className={`min-h-screen font-sans transition-colors duration-200 ${
+        isDark ? 'bg-[#0f0f0f] text-slate-100' : 'bg-slate-50 text-slate-900'
+      }`}
+    >
       {/* AMBIENT BACKGROUND GLOW */}
       {isDark && (
         <div className="fixed top-[-100px] left-1/2 -translate-x-1/2 w-[800px] h-[350px] bg-indigo-600/10 rounded-full blur-[160px] pointer-events-none" />
       )}
 
       {/* TOP NAVIGATION BAR (YOUTUBE STYLE) */}
-      <header className={`sticky top-0 z-40 backdrop-blur-md border-b px-4 md:px-8 py-3 flex items-center justify-between gap-4 ${
-        isDark ? 'bg-[#0f0f0f]/90 border-white/10' : 'bg-white/90 border-slate-200'
-      }`}>
-        
+      <header
+        className={`sticky top-0 z-40 backdrop-blur-md border-b px-4 md:px-8 py-3 flex items-center justify-between gap-4 ${
+          isDark ? 'bg-[#0f0f0f]/90 border-white/10' : 'bg-white/90 border-slate-200'
+        }`}
+      >
         {/* Left: Brand Logo */}
-        <div 
-          className="flex items-center gap-2.5 cursor-pointer shrink-0" 
+        <div
+          className="flex items-center gap-2.5 cursor-pointer shrink-0"
           onClick={() => {
             setActiveView('dashboard');
             setSearchQuery('');
@@ -196,7 +309,7 @@ export const DashboardPage: React.FC = () => {
           </span>
         </div>
 
-        {/* Center: YouTube-style Search Bar */}
+        {/* Center: Search Bar */}
         <div className="flex-1 max-w-2xl mx-auto flex items-center">
           <div className="relative flex-1 flex items-center">
             <input
@@ -205,8 +318,8 @@ export const DashboardPage: React.FC = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search memories by keyword, tag, or date..."
               className={`w-full border rounded-l-full py-2.5 pl-5 pr-10 text-sm focus:outline-none transition-all ${
-                isDark 
-                  ? 'bg-[#121212] border-[#303030] text-white placeholder-zinc-500 focus:border-indigo-500' 
+                isDark
+                  ? 'bg-[#121212] border-[#303030] text-white placeholder-zinc-500 focus:border-indigo-500'
                   : 'bg-slate-100 border-slate-300 text-slate-900 placeholder-slate-400 focus:border-indigo-600'
               }`}
             />
@@ -223,8 +336,8 @@ export const DashboardPage: React.FC = () => {
           <button
             onClick={() => setActiveView('memories')}
             className={`border border-l-0 px-6 py-2.5 rounded-r-full transition-colors flex items-center justify-center shrink-0 ${
-              isDark 
-                ? 'bg-[#222222] border-[#303030] hover:bg-[#272727] text-zinc-300' 
+              isDark
+                ? 'bg-[#222222] border-[#303030] hover:bg-[#272727] text-zinc-300'
                 : 'bg-slate-200 border-slate-300 hover:bg-slate-300 text-slate-700'
             }`}
             title="Search"
@@ -233,13 +346,25 @@ export const DashboardPage: React.FC = () => {
           </button>
         </div>
 
-        {/* Right: Sidebar Toggle Icon */}
+        {/* Right: Refresh & Menu Drawer Toggle */}
         <div className="flex items-center gap-3 shrink-0">
+          <button
+            onClick={fetchVaultData}
+            className={`p-2.5 rounded-xl border transition-all flex items-center justify-center ${
+              isDark
+                ? 'bg-[#181818] border-[#303030] hover:bg-[#222222] text-zinc-300'
+                : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-700'
+            }`}
+            title="Refresh Vault Data"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-indigo-400' : ''}`} />
+          </button>
+
           <button
             onClick={() => setIsSidebarOpen(true)}
             className={`p-2.5 rounded-xl border transition-all flex items-center gap-2 ${
-              isDark 
-                ? 'bg-[#181818] border-[#303030] hover:bg-[#222222] text-zinc-300' 
+              isDark
+                ? 'bg-[#181818] border-[#303030] hover:bg-[#222222] text-zinc-300'
                 : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-700'
             }`}
             title="Open Menu & Settings"
@@ -256,15 +381,17 @@ export const DashboardPage: React.FC = () => {
       {isSidebarOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
           {/* Backdrop */}
-          <div 
+          <div
             className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
             onClick={() => setIsSidebarOpen(false)}
           />
 
           {/* Drawer Content */}
-          <div className={`relative w-80 max-w-full h-full border-l p-6 flex flex-col justify-between z-10 shadow-2xl transition-all duration-300 ${
-            isDark ? 'bg-[#121212] border-white/10 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
-          }`}>
+          <div
+            className={`relative w-80 max-w-full h-full border-l p-6 flex flex-col justify-between z-10 shadow-2xl transition-all duration-300 ${
+              isDark ? 'bg-[#121212] border-white/10 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
+            }`}
+          >
             <div className="space-y-6">
               {/* Drawer Header */}
               <div className="flex items-center justify-between border-b pb-4 border-zinc-800">
@@ -278,7 +405,7 @@ export const DashboardPage: React.FC = () => {
                   </div>
                 </div>
 
-                <button 
+                <button
                   onClick={() => setIsSidebarOpen(false)}
                   className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800"
                 >
@@ -291,9 +418,11 @@ export const DashboardPage: React.FC = () => {
                 <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
                   Appearance Mode
                 </label>
-                <div className={`grid grid-cols-2 p-1 rounded-xl border ${
-                  isDark ? 'bg-black/40 border-zinc-800' : 'bg-slate-100 border-slate-200'
-                }`}>
+                <div
+                  className={`grid grid-cols-2 p-1 rounded-xl border ${
+                    isDark ? 'bg-black/40 border-zinc-800' : 'bg-slate-100 border-slate-200'
+                  }`}
+                >
                   <button
                     onClick={() => setTheme('dark')}
                     className={`flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold transition-all ${
@@ -327,8 +456,8 @@ export const DashboardPage: React.FC = () => {
                     setIsSidebarOpen(false);
                   }}
                   className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
-                    activeView === 'dashboard' 
-                      ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/30' 
+                    activeView === 'dashboard'
+                      ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/30'
                       : 'hover:bg-zinc-800/50 text-zinc-300'
                   }`}
                 >
@@ -342,8 +471,8 @@ export const DashboardPage: React.FC = () => {
                     setIsSidebarOpen(false);
                   }}
                   className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
-                    activeView === 'memories' 
-                      ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/30' 
+                    activeView === 'memories'
+                      ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/30'
                       : 'hover:bg-zinc-800/50 text-zinc-300'
                   }`}
                 >
@@ -357,8 +486,8 @@ export const DashboardPage: React.FC = () => {
                     setIsSidebarOpen(false);
                   }}
                   className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
-                    activeView === 'reminders' 
-                      ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/30' 
+                    activeView === 'reminders'
+                      ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/30'
                       : 'hover:bg-zinc-800/50 text-zinc-300'
                   }`}
                 >
@@ -372,8 +501,8 @@ export const DashboardPage: React.FC = () => {
                     setIsSidebarOpen(false);
                   }}
                   className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
-                    activeView === 'settings' 
-                      ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/30' 
+                    activeView === 'settings'
+                      ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/30'
                       : 'hover:bg-zinc-800/50 text-zinc-300'
                   }`}
                 >
@@ -385,7 +514,7 @@ export const DashboardPage: React.FC = () => {
 
             {/* Bottom Actions */}
             <div className="pt-4 border-t border-zinc-800">
-              <button 
+              <button
                 onClick={() => navigate('/login')}
                 className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-medium transition-all"
               >
@@ -399,7 +528,6 @@ export const DashboardPage: React.FC = () => {
 
       {/* MAIN CONTAINER */}
       <main className="max-w-7xl mx-auto px-4 md:px-8 py-8 space-y-10 relative z-10">
-        
         {/* SEARCH OVERRIDE RESULTS VIEW */}
         {searchQuery.trim() ? (
           <section className="space-y-4 animate-in fade-in duration-200">
@@ -454,13 +582,17 @@ export const DashboardPage: React.FC = () => {
 
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     {/* Active Reminders Quick List */}
-                    <div className={`lg:col-span-1 p-5 rounded-2xl border flex flex-col justify-between space-y-4 ${
-                      isDark ? 'bg-[#141414] border-[#262626]' : 'bg-white border-slate-200'
-                    }`}>
+                    <div
+                      className={`lg:col-span-1 p-5 rounded-2xl border flex flex-col justify-between space-y-4 ${
+                        isDark ? 'bg-[#141414] border-[#262626]' : 'bg-white border-slate-200'
+                      }`}
+                    >
                       <div className="space-y-3">
                         <div className="flex items-center justify-between text-xs font-semibold text-zinc-400 uppercase tracking-wider">
                           <span>Upcoming Deadlines</span>
-                          <span className="text-amber-400">{reminders.length} Active</span>
+                          <span className="text-amber-400">
+                            {reminders.filter((r) => !r.completed).length} Active
+                          </span>
                         </div>
 
                         <div className="space-y-2.5">
@@ -471,14 +603,16 @@ export const DashboardPage: React.FC = () => {
                               className={`p-3 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${
                                 r.completed
                                   ? 'opacity-50 line-through bg-zinc-900/40 border-zinc-800'
-                                  : isDark 
-                                    ? 'bg-[#1a1a1a] border-[#2a2a2a] hover:border-amber-500/30' 
-                                    : 'bg-slate-50 border-slate-200'
+                                  : isDark
+                                  ? 'bg-[#1a1a1a] border-[#2a2a2a] hover:border-amber-500/30'
+                                  : 'bg-slate-50 border-slate-200'
                               }`}
                             >
-                              <CheckCircle2 className={`w-4 h-4 mt-0.5 shrink-0 ${
-                                r.completed ? 'text-emerald-400' : 'text-zinc-500'
-                              }`} />
+                              <CheckCircle2
+                                className={`w-4 h-4 mt-0.5 shrink-0 ${
+                                  r.completed ? 'text-emerald-400' : 'text-zinc-500'
+                                }`}
+                              />
                               <div className="space-y-0.5 flex-1 min-w-0">
                                 <p className="text-xs font-medium truncate">{r.title}</p>
                                 <p className="text-[10px] text-zinc-500 font-mono">
@@ -500,7 +634,7 @@ export const DashboardPage: React.FC = () => {
 
                     {/* Priority Memories */}
                     <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {memories.filter((m) => m.isPriority).map((mem) => (
+                      {priorityMemories.map((mem) => (
                         <MemoryCard key={mem.id} mem={mem} isDark={isDark} />
                       ))}
                     </div>
@@ -515,8 +649,12 @@ export const DashboardPage: React.FC = () => {
                         <Shuffle className="w-4 h-4" />
                       </div>
                       <div>
-                        <h2 className="font-bold text-base tracking-tight">Daily Discovery (Forgotten Memories)</h2>
-                        <p className="text-xs text-zinc-400">Randomly picked from your vault to trigger active recall.</p>
+                        <h2 className="font-bold text-base tracking-tight">
+                          Daily Discovery (Forgotten Memories)
+                        </h2>
+                        <p className="text-xs text-zinc-400">
+                          Randomly picked from your vault to trigger active recall.
+                        </p>
                       </div>
                     </div>
 
@@ -534,8 +672,8 @@ export const DashboardPage: React.FC = () => {
                       <div
                         key={'daily-' + mem.id}
                         className={`p-5 rounded-2xl border space-y-3 relative overflow-hidden transition-all group ${
-                          isDark 
-                            ? 'bg-gradient-to-br from-[#161320] via-[#121212] to-[#121212] border-purple-500/30 hover:border-purple-500/60' 
+                          isDark
+                            ? 'bg-gradient-to-br from-[#161320] via-[#121212] to-[#121212] border-purple-500/30 hover:border-purple-500/60'
                             : 'bg-gradient-to-br from-purple-50 via-white to-white border-purple-200'
                         }`}
                       >
@@ -557,7 +695,10 @@ export const DashboardPage: React.FC = () => {
 
                         <div className="pt-2 flex items-center justify-between text-[11px] text-zinc-500 border-t border-zinc-800/50">
                           <span>Category: {mem.category}</span>
-                          <span className="text-purple-400 hover:underline cursor-pointer" onClick={() => setActiveView('memories')}>
+                          <span
+                            className="text-purple-400 hover:underline cursor-pointer"
+                            onClick={() => setActiveView('memories')}
+                          >
                             Open memory →
                           </span>
                         </div>
@@ -577,7 +718,9 @@ export const DashboardPage: React.FC = () => {
                       <Layers className="w-5 h-5 text-purple-400" />
                       <span>All Memories Vault</span>
                     </h1>
-                    <p className="text-xs text-zinc-400">Total {memories.length} indexed knowledge cards in your second brain.</p>
+                    <p className="text-xs text-zinc-400">
+                      Total {memories.length} indexed knowledge cards in your second brain.
+                    </p>
                   </div>
 
                   <button
@@ -605,7 +748,9 @@ export const DashboardPage: React.FC = () => {
                       <Bell className="w-5 h-5 text-amber-400" />
                       <span>Scheduled Reminders</span>
                     </h1>
-                    <p className="text-xs text-zinc-400">Track tasks and review schedules across your memory base.</p>
+                    <p className="text-xs text-zinc-400">
+                      Track tasks and review schedules across your memory base.
+                    </p>
                   </div>
 
                   <button
@@ -625,12 +770,14 @@ export const DashboardPage: React.FC = () => {
                         r.completed
                           ? 'opacity-50 line-through bg-zinc-900/40 border-zinc-800'
                           : isDark
-                            ? 'bg-[#141414] border-[#262626] hover:border-amber-500/40'
-                            : 'bg-white border-slate-200'
+                          ? 'bg-[#141414] border-[#262626] hover:border-amber-500/40'
+                          : 'bg-white border-slate-200'
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <CheckCircle2 className={`w-5 h-5 ${r.completed ? 'text-emerald-400' : 'text-zinc-500'}`} />
+                        <CheckCircle2
+                          className={`w-5 h-5 ${r.completed ? 'text-emerald-400' : 'text-zinc-500'}`}
+                        />
                         <div>
                           <p className="text-sm font-semibold">{r.title}</p>
                           <p className="text-xs text-zinc-400 font-mono">
@@ -639,9 +786,13 @@ export const DashboardPage: React.FC = () => {
                         </div>
                       </div>
 
-                      <span className={`text-xs px-2.5 py-1 rounded-full border ${
-                        r.isUrgent ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-zinc-800 border-zinc-700 text-zinc-400'
-                      }`}>
+                      <span
+                        className={`text-xs px-2.5 py-1 rounded-full border ${
+                          r.isUrgent
+                            ? 'bg-red-500/10 border-red-500/20 text-red-400'
+                            : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+                        }`}
+                      >
                         {r.isUrgent ? 'High Priority' : 'Normal'}
                       </span>
                     </div>
@@ -658,12 +809,19 @@ export const DashboardPage: React.FC = () => {
                     <Settings className="w-5 h-5 text-slate-400" />
                     <span>Account Settings</span>
                   </h1>
-                  <button onClick={() => setActiveView('dashboard')} className="text-xs text-indigo-400 hover:underline">
+                  <button
+                    onClick={() => setActiveView('dashboard')}
+                    className="text-xs text-indigo-400 hover:underline"
+                  >
                     ← Back to Dashboard
                   </button>
                 </div>
 
-                <div className={`p-6 rounded-2xl border space-y-4 ${isDark ? 'bg-[#141414] border-[#262626]' : 'bg-white border-slate-200'}`}>
+                <div
+                  className={`p-6 rounded-2xl border space-y-4 ${
+                    isDark ? 'bg-[#141414] border-[#262626]' : 'bg-white border-slate-200'
+                  }`}
+                >
                   <div className="flex items-center gap-4">
                     <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-2xl text-white">
                       A
@@ -677,7 +835,7 @@ export const DashboardPage: React.FC = () => {
                   <div className="pt-4 border-t border-zinc-800 space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-zinc-300">Theme Preferences</span>
-                      <button 
+                      <button
                         onClick={() => setTheme(isDark ? 'light' : 'dark')}
                         className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg"
                       >
@@ -690,7 +848,6 @@ export const DashboardPage: React.FC = () => {
             )}
           </>
         )}
-
       </main>
     </div>
   );
@@ -698,11 +855,13 @@ export const DashboardPage: React.FC = () => {
 
 // HELPER COMPONENT: MEMORY CARD
 const MemoryCard: React.FC<{ mem: MemoryItem; isDark: boolean }> = ({ mem, isDark }) => (
-  <div className={`p-5 rounded-2xl border flex flex-col justify-between space-y-4 transition-all duration-200 group hover:shadow-xl ${
-    isDark 
-      ? 'bg-[#141414] border-[#262626] hover:border-indigo-500/40 hover:shadow-indigo-500/5' 
-      : 'bg-white border-slate-200 hover:border-indigo-300'
-  }`}>
+  <div
+    className={`p-5 rounded-2xl border flex flex-col justify-between space-y-4 transition-all duration-200 group hover:shadow-xl ${
+      isDark
+        ? 'bg-[#141414] border-[#262626] hover:border-indigo-500/40 hover:shadow-indigo-500/5'
+        : 'bg-white border-slate-200 hover:border-indigo-300'
+    }`}
+  >
     <div className="space-y-3">
       <div className="flex items-center justify-between text-xs">
         <span className="px-2.5 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-medium">
@@ -718,9 +877,7 @@ const MemoryCard: React.FC<{ mem: MemoryItem; isDark: boolean }> = ({ mem, isDar
         {mem.title}
       </h3>
 
-      <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3">
-        {mem.summary}
-      </p>
+      <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3">{mem.summary}</p>
     </div>
 
     <div className="pt-3 border-t border-zinc-800/60 flex items-center justify-between text-xs">
@@ -736,9 +893,22 @@ const MemoryCard: React.FC<{ mem: MemoryItem; isDark: boolean }> = ({ mem, isDar
         ))}
       </div>
 
-      <div className="flex items-center gap-1 text-[11px] text-zinc-500 shrink-0 font-mono">
-        <Clock className="w-3 h-3" />
-        <span>{mem.timeAgo}</span>
+      <div className="flex items-center gap-2 text-[11px] text-zinc-500 shrink-0 font-mono">
+        {mem.sourceUrl && (
+          <a
+            href={mem.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-indigo-400 hover:underline flex items-center gap-0.5"
+            title="Open Source"
+          >
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        )}
+        <div className="flex items-center gap-1">
+          <Clock className="w-3 h-3" />
+          <span>{mem.timeAgo}</span>
+        </div>
       </div>
     </div>
   </div>

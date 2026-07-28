@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Mnemo - AI Memory Saver",
+  "version": "1.0",
+  "description": "Right-click selected text to save memories and auto-detect reminders with AI.",
+  "permissions": [
+    "contextMenus",
+    "activeTab",
+    "notifications"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Mnemo Active"
+  }
+}
