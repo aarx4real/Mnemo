@@ -6,12 +6,14 @@
   "permissions": [
     "contextMenus",
     "activeTab",
-    "notifications"
+    "notifications",
+    "storage"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Mnemo Active"
+    "default_title": "Mnemo Active",
+    "default_popup": "popup.html"
   }
 }

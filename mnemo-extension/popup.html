@@ -6,8 +6,10 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { width: 320px; background-color: #0f0f0f; color: #f1f5f9; padding: 16px; }
     
-    .header { display: flex; items-center; gap: 8px; margin-bottom: 14px; }
-    .header h2 { font-size: 15px; font-weight: 700; color: #818cf8; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .header h2 { font-size: 15px; font-weight: 700; color: #818cf8; display: flex; align-items: center; gap: 6px; }
+    .icon-btn { background: none; border: none; color: #94a3b8; font-size: 14px; cursor: pointer; padding: 4px; border-radius: 4px; }
+    .icon-btn:hover { color: #f1f5f9; background: #27272a; }
 
     .form-group { margin-bottom: 12px; }
     label { display: block; font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; margin-bottom: 4px; }
@@ -44,50 +46,81 @@
     }
     button:hover { background-color: #4338ca; }
     button:disabled { background-color: #312e81; opacity: 0.6; cursor: not-allowed; }
+    .secondary-btn { background-color: #27272a; color: #e2e8f0; margin-top: 8px; }
+    .secondary-btn:hover { background-color: #3f3f46; }
 
-    #status { font-size: 11px; text-align: center; margin-top: 8px; }
+    #status, #settingsStatus { font-size: 11px; text-align: center; margin-top: 8px; }
     .success { color: #4ade80; }
     .error { color: #f87171; }
+    .hidden { display: none; }
+    .helper-text { font-size: 10px; color: #71717a; margin-top: 3px; line-height: 1.3; }
   </style>
 </head>
 <body>
   <div class="header">
     <h2>🧠 Mnemo Saver</h2>
+    <button type="button" id="toggleSettingsBtn" class="icon-btn" title="API & Database Settings">⚙️</button>
   </div>
 
-  <div class="form-group">
-    <label for="title">Title</label>
-    <input type="text" id="title" placeholder="Loading page title..." />
+  <!-- Memory Form -->
+  <div id="memorySection">
+    <div class="form-group">
+      <label for="title">Title</label>
+      <input type="text" id="title" placeholder="Loading page title..." />
+    </div>
+
+    <div class="form-group">
+      <label for="category">Category</label>
+      <select id="category">
+        <option value="Engineering">Engineering</option>
+        <option value="AI Research">AI Research</option>
+        <option value="Web Clips" selected>Web Clips</option>
+        <option value="Books">Books</option>
+        <option value="General">General</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="summary">Summary / Notes</label>
+      <textarea id="summary" placeholder="Add a short summary or key insight..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="tags">Tags (comma separated)</label>
+      <input type="text" id="tags" value="Web, Chrome" />
+    </div>
+
+    <div class="form-group checkbox-group">
+      <input type="checkbox" id="isPriority" />
+      <label for="isPriority" style="text-transform: none; margin: 0;">Mark as Priority Memory</label>
+    </div>
+
+    <button id="saveBtn">Save Memory</button>
+    <div id="status"></div>
   </div>
 
-  <div class="form-group">
-    <label for="category">Category</label>
-    <select id="category">
-      <option value="Engineering">Engineering</option>
-      <option value="AI Research">AI Research</option>
-      <option value="Web Clips" selected>Web Clips</option>
-      <option value="Books">Books</option>
-      <option value="General">General</option>
-    </select>
-  </div>
+  <!-- Settings Section -->
+  <div id="settingsSection" class="hidden">
+    <div class="form-group">
+      <label for="settingSupabaseUrl">Supabase URL</label>
+      <input type="text" id="settingSupabaseUrl" placeholder="https://your-ref.supabase.co" />
+    </div>
 
-  <div class="form-group">
-    <label for="summary">Summary / Notes</label>
-    <textarea id="summary" placeholder="Add a short summary or key insight..."></textarea>
-  </div>
+    <div class="form-group">
+      <label for="settingSupabaseKey">Supabase Anon Key</label>
+      <input type="password" id="settingSupabaseKey" placeholder="eyJhbGciOi..." />
+    </div>
 
-  <div class="form-group">
-    <label for="tags">Tags (comma separated)</label>
-    <input type="text" id="tags" value="Web, Chrome" />
-  </div>
+    <div class="form-group">
+      <label for="settingGeminiKey">Gemini API Key</label>
+      <input type="password" id="settingGeminiKey" placeholder="AIzaSy..." />
+      <p class="helper-text">Required for automatic AI summarization and reminder detection.</p>
+    </div>
 
-  <div class="form-group checkbox-group">
-    <input type="checkbox" id="isPriority" />
-    <label for="isPriority" style="text-transform: none; margin: 0;">Mark as Priority Memory</label>
+    <button id="saveSettingsBtn">Save Configuration</button>
+    <button type="button" id="backBtn" class="secondary-btn">Back</button>
+    <div id="settingsStatus"></div>
   </div>
-
-  <button id="saveBtn">Save Memory</button>
-  <div id="status"></div>
 
   <script src="popup.js"></script>
 </body>
